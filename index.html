@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS Kasir Pro - Final Version</title>
+    <style>
+        :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --danger: #e74c3c; --warning: #f39c12; --bg: #f4f7f6; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); overflow: hidden; }
+        #login-page { position: fixed; inset: 0; background: var(--primary); display: flex; justify-content: center; align-items: center; z-index: 999; }
+        .login-card { background: white; padding: 40px; border-radius: 12px; width: 300px; text-align: center; }
+        #main-app { display: none; height: 100vh; }
+        
+        /* SIDEBAR */
+        .sidebar { width: 260px; background: var(--primary); color: white; display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar-header { padding: 20px; font-weight: bold; border-bottom: 1px solid #34495e; text-align: center; }
+        .nav-btn { padding: 15px; border: none; background: none; color: #bdc3c7; text-align: left; cursor: pointer; width: 100%; font-size: 1rem; border-left: 5px solid transparent; transition: 0.3s; }
+        .nav-btn.active { background: #34495e; color: white; border-left: 5px solid var(--accent); }
+        .btn-logout { margin-top: auto; background: var(--danger); color: white; padding: 15px; border: none; cursor: pointer; font-weight: bold; }
+        
+        .content-area { flex: 1; padding: 30px; overflow-y: auto; display: flex; flex-direction: column; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        input, select { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
+        .qty-btn { background: #eee; border: 1px solid #ccc; padding: 5px 10px; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        .btn-action { background: var(--success); color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 10px; }
+        
+        /* KASIR LAYOUT */
+        .kasir-container { display: flex; gap: 20px; align-items: flex-start; }
+        .category-sidebar { width: 140px; flex-shrink: 0; }
+        .cat-filter-btn { width: 100%; padding: 12px; margin-bottom: 8px; border: 1px solid #ddd; background: white; border-radius: 8px; cursor: pointer; text-align: left; font-size: 0.85rem; }
+        .cat-filter-btn.active { background: var(--accent); color: white; border-color: var(--accent); font-weight: bold; }
+        .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+        .menu-item { background: white; border: 1px solid #eee; border-radius: 10px; overflow: hidden; cursor: pointer; text-align: center; padding-bottom: 10px; transition: 0.2s; }
+        .img-container { width: 100%; aspect-ratio: 1/1; overflow: hidden; background: #eee; position: relative; }
+        .img-container img { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        #previewBox { width: 100px; height: 100px; border: 2px dashed #ccc; border-radius: 8px; margin: 10px 0; display: flex; justify-content: center; align-items: center; overflow: hidden; background: #fafafa; }
+        #previewBox img { width: 100%; height: 100%; object-fit: cover; }
+        .status-badge { padding: 5px 10px; border-radius: 20px; font-size: 0.75rem; display: inline-block; margin-bottom: 10px; }
+        .btn-mini { padding: 5px 10px; border-radius: 4px; border: none; cursor: pointer; color: white; margin-right: 5px; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+
+    <div id="login-page">
+        <div class="login-card">
+            <h2>LOGIN KASIR</h2>
+            <select id="userSelect">
+                <option value="bintang">bintang</option>
+                <option value="nana">nana</option>
+                <option value="ayin">ayin</option>
+            </select>
+            <input type="password" id="userPin" placeholder="Masukkan PIN">
+            <button class="btn-action" onclick="handleLogin()">MASUK</button>
+        </div>
+    </div>
+
+    <div id="main-app">
+        <div class="sidebar">
+            <div class="sidebar-header">POS KASIR PRO<br><small id="user-info" style="color:var(--accent)"></small></div>
+            <button id="nav-kasir" class="nav-btn active" onclick="bukaPage('page-kasir', 'nav-kasir')">🛒 Kasir</button>
+            <button id="nav-katalog" class="nav-btn" onclick="bukaPage('page-katalog', 'nav-katalog')">➕ Kelola Katalog</button>
+            <button id="nav-printer" class="nav-btn" onclick="bukaPage('page-printer', 'nav-printer')">⚙️ Printer Settings</button>
+            <button class="btn-logout" onclick="handleLogout()">🚪 LOG OUT</button>
+        </div>
+
+        <div class="content-area">
+            <div id="page-kasir" class="page">
+                <h1>Transaksi</h1>
+                <div class="kasir-container">
+                    <div class="category-sidebar" id="catFilterArea"></div>
+                    <div class="card" style="flex:2">
+                        <h3 id="currentCatTitle">Semua Menu</h3>
+                        <div class="menu-grid" id="menuArea"></div>
+                    </div>
+                    <div class="card" style="flex:1.3">
+                        <h3>Keranjang</h3>
+                        <div id="print-indicator" class="status-badge" style="background: #fdedec; color: #e74c3c;">Printer: Off</div>
+                        <table>
+                            <thead><tr><th>Item</th><th style="text-align:center">Qty</th><th>Subtotal</th></tr></thead>
+                            <tbody id="bodyKeranjang"></tbody>
+                        </table>
+                        <h2 id="displayTotal" style="text-align:right">Total: Rp 0</h2>
+                        <button class="btn-action" onclick="handleCheckout()">SELESAI & CETAK</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="page-printer" class="page" style="display:none">
+                <h1>Konfigurasi Printer</h1>
+                <div class="card">
+                    <div id="printerFullStatus" class="status-badge" style="background: #fdedec; color: #e74c3c; margin-bottom: 20px;">Status: Belum Terhubung</div>
+                    <button class="btn-action" style="background:var(--accent)" onclick="connectBT()">HUBUNGKAN BLUETOOTH</button>
+                    <button class="btn-action" style="background:var(--warning)" onclick="testPrintBT()">TEST PRINT</button>
+                </div>
+            </div>
+
+            <div id="page-katalog" class="page" style="display:none">
+                <h1>Kelola Produk & Kategori</h1>
+                <div style="display:flex; gap:20px">
+                    <div class="card" style="flex:1">
+                        <h3 id="formTitle">Tambah Produk</h3>
+                        <input type="hidden" id="editId">
+                        <input type="text" id="pNama" placeholder="Nama Menu">
+                        <input type="number" id="pHarga" placeholder="Harga">
+                        <label style="font-size: 0.8rem; color: #666;">Upload Foto Menu:</label>
+                        <input type="file" id="pFile" accept="image/*" onchange="previewImage(this)">
+                        <div id="previewBox"><small>No Image</small></div>
+                        <select id="pGrup"></select>
+                        <button class="btn-action" id="btnSimpan" onclick="simpanProduk()">SIMPAN PRODUK</button>
+                        <button class="btn-action" id="btnBatal" style="display:none; background:#95a5a6" onclick="resetForm()">BATAL EDIT</button>
+                    </div>
+                    <div class="card" style="flex:1">
+                        <h3>Kategori</h3>
+                        <input type="text" id="newCat" placeholder="Nama Kategori Baru">
+                        <button class="btn-action" onclick="tambahKategori()">TAMBAH KATEGORI</button>
+                        <hr>
+                        <table style="font-size: 0.8rem;"><tbody id="listKategoriAdmin"></tbody></table>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Daftar Produk</h3>
+                    <table>
+                        <thead><tr><th>Foto</th><th>Nama</th><th>Grup</th><th>Harga</th><th>Aksi</th></tr></thead>
+                        <tbody id="bodyKatalog"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const URL_GAS = "https://script.google.com/macros/s/AKfycbzvN2mvhLCREEqz5WABzF61OFxeOA3jj4tPJFzz_AnTIX-clpYTc8imynjgYf6FhG9j2A/exec";
+    const USERS = { "bintang": "1234", "nana": "1212", "ayin": "2323" };
+    
+    let katalog = JSON.parse(localStorage.getItem('db_katalog')) || [];
+    let kategoriList = JSON.parse(localStorage.getItem('db_kategori')) || ["Umum"];
+    let keranjang = [];
+    let activeCat = "Semua";
+    let currentUser = "";
+    let printerChar = null;
+    let currentBase64 = "";
+
+    // --- NAVIGASI TELITI ---
+    function bukaPage(pageId, navId) {
+        document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+        document.getElementById(pageId).style.display = 'block';
+        document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(navId).classList.add('active');
+    }
+
+    function handleLogin() {
+        const u = document.getElementById('userSelect').value;
+        const p = document.getElementById('userPin').value;
+        if(USERS[u] === p) {
+            currentUser = u;
+            document.getElementById('login-page').style.display = 'none';
+            document.getElementById('main-app').style.display = 'flex';
+            document.getElementById('user-info').innerText = "Kasir: " + u;
+            refreshAll();
+        } else { alert("PIN SALAH!"); }
+    }
+
+    function refreshAll() {
+        renderCatFilters();
+        renderMenu();
+        renderKatalog();
+        renderKategoriAdmin();
+        updateDrop();
+    }
+
+    // --- MANAJEMEN FOTO & PRODUK ---
+    function previewImage(input) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.src = e.target.result;
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 200;
+                    const scaleSize = MAX_WIDTH / img.width;
+                    canvas.width = MAX_WIDTH;
+                    canvas.height = img.height * scaleSize;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    currentBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                    document.getElementById('previewBox').innerHTML = `<img src="${currentBase64}">`;
+                }
+            }
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function simpanProduk() {
+        const id = document.getElementById('editId').value;
+        const n = document.getElementById('pNama').value;
+        const h = parseInt(document.getElementById('pHarga').value);
+        const g = document.getElementById('pGrup').value;
+        if(!n || !h) return alert("Lengkapi Nama & Harga!");
+
+        if(id) {
+            const idx = katalog.findIndex(k => k.id == id);
+            katalog[idx] = { ...katalog[idx], nama: n, harga: h, grup: g, foto: currentBase64 || katalog[idx].foto };
+        } else {
+            katalog.push({ id: Date.now(), nama: n, harga: h, grup: g, foto: currentBase64 });
+        }
+        localStorage.setItem('db_katalog', JSON.stringify(katalog));
+        resetForm();
+        refreshAll();
+    }
+
+    function editMenu(id) {
+        const k = katalog.find(item => item.id == id);
+        document.getElementById('editId').value = k.id;
+        document.getElementById('pNama').value = k.nama;
+        document.getElementById('pHarga').value = k.harga;
+        document.getElementById('pGrup').value = k.grup;
+        currentBase64 = k.foto || "";
+        document.getElementById('previewBox').innerHTML = k.foto ? `<img src="${k.foto}">` : '<small>No Image</small>';
+        document.getElementById('formTitle').innerText = "Edit Produk";
+        document.getElementById('btnSimpan').innerText = "UPDATE PRODUK";
+        document.getElementById('btnBatal').style.display = "block";
+    }
+
+    function resetForm() {
+        document.getElementById('editId').value = "";
+        document.getElementById('pNama').value = "";
+        document.getElementById('pHarga').value = "";
+        document.getElementById('pFile').value = "";
+        document.getElementById('previewBox').innerHTML = '<small>No Image</small>';
+        currentBase64 = "";
+        document.getElementById('formTitle').innerText = "Tambah Produk";
+        document.getElementById('btnSimpan').innerText = "SIMPAN PRODUK";
+        document.getElementById('btnBatal').style.display = "none";
+    }
+
+    function renderKatalog() {
+        document.getElementById('bodyKatalog').innerHTML = katalog.map(k => `
+            <tr>
+                <td><img src="${k.foto || ''}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;background:#eee"></td>
+                <td>${k.nama}</td>
+                <td>${k.grup}</td>
+                <td>${k.harga.toLocaleString()}</td>
+                <td>
+                    <button class="btn-mini" style="background:var(--warning)" onclick="editMenu(${k.id})">Edit</button>
+                    <button class="btn-mini" style="background:var(--danger)" onclick="hapusProduk(${k.id})">Del</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // --- KASIR & SPREADSHEET FIX ---
+    function renderCatFilters() {
+        let h = `<button class="cat-filter-btn ${activeCat==='Semua'?'active':''}" onclick="setFilter('Semua')">⭐ Semua</button>`;
+        kategoriList.forEach(c => { h += `<button class="cat-filter-btn ${activeCat===c?'active':''}" onclick="setFilter('${c}')">${c}</button>`; });
+        document.getElementById('catFilterArea').innerHTML = h;
+    }
+    function setFilter(c) { activeCat = c; document.getElementById('currentCatTitle').innerText = c; renderCatFilters(); renderMenu(); }
+    
+    function renderMenu() {
+        const f = activeCat === "Semua" ? katalog : katalog.filter(k => k.grup === activeCat);
+        document.getElementById('menuArea').innerHTML = f.map(k => `
+            <div class="menu-item" onclick="tambahKeKeranjang(${k.id})">
+                <div class="img-container"><img src="${k.foto || 'https://via.placeholder.com/150'}"></div>
+                <div style="padding:5px"><b>${k.nama}</b><br><small>Rp ${k.harga.toLocaleString()}</small></div>
+            </div>
+        `).join('');
+    }
+
+    function tambahKeKeranjang(id) {
+        const item = katalog.find(k => k.id == id);
+        const ada = keranjang.find(k => k.id == id);
+        if(ada) { ada.qty++; ada.subtotal = ada.qty * ada.harga; }
+        else { keranjang.push({...item, qty:1, subtotal: item.harga}); }
+        renderKeranjang();
+    }
+
+    function renderKeranjang() {
+        const b = document.getElementById('bodyKeranjang');
+        b.innerHTML = keranjang.map((k, i) => `
+            <tr><td>${k.nama}</td><td style="text-align:center"><button class="qty-btn" onclick="changeQty(${i},-1)">-</button> ${k.qty} <button class="qty-btn" onclick="changeQty(${i},1)">+</button></td><td>${k.subtotal.toLocaleString()}</td></tr>
+        `).join('') || '<tr><td colspan="3" style="text-align:center">Kosong</td></tr>';
+        document.getElementById('displayTotal').innerText = "Total: Rp " + keranjang.reduce((s,i)=>s+i.subtotal, 0).toLocaleString();
+    }
+
+    function changeQty(idx, delta) {
+        keranjang[idx].qty += delta;
+        if(keranjang[idx].qty <= 0) keranjang.splice(idx, 1);
+        else keranjang[idx].subtotal = keranjang[idx].qty * keranjang[idx].harga;
+        renderKeranjang();
+    }
+
+    async function handleCheckout() {
+        if(keranjang.length === 0) return alert("Keranjang Kosong!");
+        const total = keranjang.reduce((s,i)=>s+i.subtotal, 0);
+        
+        // FORMAT DATA LENGKAP UNTUK SPREADSHEET
+        const detailItems = keranjang.map(k => `${k.nama} (${k.qty}x)`).join(', ');
+        const idTrx = "TRX-" + Date.now();
+        const waktu = new Date().toLocaleString('id-ID');
+
+        const payload = {
+            id_transaksi: idTrx,
+            user_login: currentUser,
+            nama_menu: detailItems,
+            total: total,
+            tanggal: waktu
+        };
+
+        // 1. KIRIM SPREADSHEET (MUTLAK)
+        try {
+            await fetch(URL_GAS, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+        } catch(e) { console.log("GAS Error"); }
+
+        // 2. PRINT (JIKA KONEK)
+        if(printerChar) {
+            let s = `   KASIR PRO\n--------------------\nID: ${idTrx}\nKasir: ${currentUser}\n--------------------\n`;
+            keranjang.forEach(k => { s += `${k.nama}\n${k.qty} x ${k.harga.toLocaleString()} = ${k.subtotal.toLocaleString()}\n`; });
+            s += `--------------------\nTOTAL: Rp ${total.toLocaleString()}\n   Terima Kasih!\n\n\n\n`;
+            const enc = new TextEncoder();
+            await printerChar.writeValue(enc.encode(s));
+        }
+
+        alert("Berhasil!");
+        keranjang = [];
+        renderKeranjang();
+    }
+
+    // --- KATEGORI ---
+    function tambahKategori() {
+        const v = document.getElementById('newCat').value.trim();
+        if(v && !kategoriList.includes(v)) { 
+            kategoriList.push(v); 
+            localStorage.setItem('db_kategori', JSON.stringify(kategoriList)); 
+            refreshAll(); 
+            document.getElementById('newCat').value = ""; 
+        }
+    }
+    function hapusKategori(nama) {
+        if(nama === "Umum") return;
+        if(confirm(`Hapus '${nama}'? Menu akan pindah ke 'Umum'.`)) {
+            katalog = katalog.map(k => { if(k.grup === nama) k.grup = "Umum"; return k; });
+            kategoriList = kategoriList.filter(c => c !== nama);
+            localStorage.setItem('db_katalog', JSON.stringify(katalog));
+            localStorage.setItem('db_kategori', JSON.stringify(kategoriList));
+            refreshAll();
+        }
+    }
+    function renderKategoriAdmin() {
+        document.getElementById('listKategoriAdmin').innerHTML = kategoriList.map(c => `<tr><td>${c}</td><td style="text-align:right">${c!=='Umum'?`<button class="btn-mini" style="background:var(--danger)" onclick="hapusKategori('${c}')">Del</button>`:''}</td></tr>`).join('');
+    }
+    function updateDrop() { document.getElementById('pGrup').innerHTML = kategoriList.map(c => `<option value="${c}">${c}</option>`).join(''); }
+    function hapusProduk(id) { if(confirm("Hapus?")) { katalog = katalog.filter(k => k.id != id); localStorage.setItem('db_katalog', JSON.stringify(katalog)); refreshAll(); } }
+    function handleLogout() { location.reload(); }
+
+    // --- BLUETOOTH ---
+    async function connectBT() {
+        try {
+            const dev = await navigator.bluetooth.requestDevice({
+                filters: [{ services: ['000018f0-0000-1000-8000-00805f9b34fb'] }, { namePrefix: 'Printer' }],
+                optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
+            });
+            const server = await dev.gatt.connect();
+            const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+            const chars = await service.getCharacteristics();
+            printerChar = chars.find(c => c.properties.write || c.properties.writeWithoutResponse);
+            document.getElementById('printerFullStatus').innerText = "Status: Terhubung (" + dev.name + ")";
+            document.getElementById('printerFullStatus').style.background = "#eafaf1";
+            document.getElementById('printerFullStatus').style.color = "#27ae60";
+            document.getElementById('print-indicator').innerText = "Printer: Ready";
+            document.getElementById('print-indicator').style.background = "#eafaf1";
+            document.getElementById('print-indicator').style.color = "#27ae60";
+        } catch (e) { alert("Bluetooth Gagal: " + e); }
+    }
+    function testPrintBT() { if(printerChar) { const enc = new TextEncoder(); printerChar.writeValue(enc.encode("TEST PRINT OK\n\n\n")); } }
+</script>
+</body>
+</html>
